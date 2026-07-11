@@ -20,3 +20,12 @@ Went in and handled all the pyproject.toml stuff --- just moved it to a director
 
 Now we're moving!
 
+### Initialization
+
+Realizing I need to handle initialization. I think I'm just going to default to Kaiming normal because I've heard of it, and look more into it later
+
+
+Had to handle a lot of decisionmaking about repo structure.
+
+
+Ah damn I think I want to have `layers.basic` and `layers.quadratic_attention` for example. whatever for now.

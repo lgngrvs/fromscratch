@@ -5,6 +5,7 @@ description = "The language model stack from scratch"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "einops>=0.8.2",
     "numpy>=2.5.1",
     "torch>=2.13.0",
 ]

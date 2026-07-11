@@ -26,9 +26,11 @@ All code is written by hand. Language models may be consulted as tutors but may 
 
 ### Imports
 
-All imports route through a single main list in `tools/__init__.py`, exact package names are required so we can see every single import we use.
+All external imports route through a single main list in `tools/__init__.py`, exact package names are required so we can see every single import we use.
 
 Most packages stay named with `tls` e.g. `tls.einsum`; some things e.g. `Module`, `Tensor` I just really don't want to have to write `tls` in front of so I'm being lazy. Maybe I will regret this at some point. Who knows!
+
+Everything that I have built myself will have a specific directory.
 
 ### Package management 
 
@@ -38,7 +40,8 @@ Everything is always run through `uv`.
 
 I don't really know *a priori* how this is going to be structured so this will change over time, but here is my guess for now:
 
-`/components`: architectural components
+`/architecture`: whole architectures
+`/architecture/layers.py`: layers that go into architectures (will probably get moved at some point but for now is all in one file)
 `/training/scripts`: scripts for actually running 
 `/training/optimizers.py`: optimizers
 `/training/losses.py`: losses
