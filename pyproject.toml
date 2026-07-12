@@ -17,3 +17,8 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
     packages = ["tools"] # Allows tools/ to be imported
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.21",
+]
