@@ -1,28 +1,22 @@
 # From Scratch
 
-> You don't know something until you've built it from scratch
+> You don't know something until you've built it yourself from scratch! 
 
-One day I would like to implement the whole language model stack from the bottom up: algorithms, architecture, optimizers, training phases, all the way down through the compiler, to the operating system. Today is not that day.
+One day I would like to implement the whole language model stack from the bottom to the top, including the actual computer running it: like, operating system, up to cuda kernels, up to architecture, optimizers, and training algorithms. Today is not really that day. But one day this repo may eventually house all of that!
 
-This repo contains, at the moment, bare-pytorch implementations of as many things as I can make, in a modular format that allows composability. Basically Andrej Karpathy's Micrograd/NanoGPT projects but I did them so they're different.
+This repo contains, at the moment, bare-pytorch implementations of as many parts of the LLM stack as I can make, written by me by hand. Bare pytorch means I will use torch's basic computational primitives (e.g. `torch.sum` up to `Modules` and `Parameters`), but will not use any built in architectural components (e.g. `torch.nn.Linear`), optimizers, et cetera. The goal is to understand the process end-to-end. (I'd even like like to reduce or eliminate my dependence on Torch altogether --- write my own autodiff, kernels, et cetera --- but that's a long way down the road.) Eventually, I'll be using open data sources and following open research (e.g. OLMO, DeepSeek technical reports) to try and train my own langauge model. You might compare with Andrej Karpathy's Micrograd/NanoGPT projects but I did it myself so it's different and moderately worse.
 
-This repository contains *atelic* software: software built where the purpose lies in the process of building, not the end result. All code will be written by hand. 
+This repository contains *atelic* software: software built where the purpose lies in the process of building, not the end result. To repeat again, all code is be written by hand by me!
 
 ## Rules
-
-### Imports
-The goal is to understand the components themselves; we can go to a lower level later if we want.
-
-Allowed imports:
-- `torch` (no `nn` etc.)
-- `torch.einsum`: einsum makes manipulations clear
 
 ### LLM Help
 All code is written by hand. Language models may be consulted as tutors but may not edit any files directly. Acceptable uses:
 
 - They may be consulted for conceptual help, and may supply equations. Humans must turn those equations into code.
-- They may be asked for debugging help, in which case they can give a line number and *if absolutely necessary* a hint at the fix, if something is broken.
-- They may be asked for code feedback, **once implementation of a component is finished**. 
+- They may be asked for debugging help, in which case they can give a line number and *if absolutely necessary* a hint at the fix, if something is broken. Debug help should be reserved as a last resort; you should debug everything yourself.
+  - So far I have consulted LLM debug `0` times as of 2026-07-12.
+- LLMs may be asked for code feedback, **once implementation of a component is finished**. 
 
 ### Imports
 
