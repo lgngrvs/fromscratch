@@ -32,39 +32,54 @@ class Tokenizer():
 # is this a module?
 class ToyTokenizer(Tokenizer):
     """
-    Toy tokenizer for testing.
-    - Vocab size 27, latent_size 27
-    - accepts lowercase letters and spaces only
-    - turns them into token ids 0,..., 26
+    Toy character-level tokenizer for testing.
     """
     def __init__(self):
         super(ToyTokenizer, self).__init__()
+        # Letter position in allowed_letters also defines token id
         self.allowed_letters = list("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ.,!?")
-        self.vocab_size=len(self.allowed_letters)
+        self.vocab_size=len(self.allowed_letters) + 1 # inluding pad token
         self.pad_token_id =len(self.allowed_letters) + 1
         
-    def tokenize_str(self, s: str):
+    def _tokenize_str(self, s: str):
+        """
+        DEPRECATED BUT KEEPING AROUND UNTIL tokenize_and_pack
+        is written, just in case it turns out to be useful
+        and I decide to keep it.
+        Code is duplicated in batch_tokenize_and_pad,
+        with the advantage that we get to tell the user
+        which datapoint their error is in.
+        Probably should just be part of tokenize_and_pad
+        If you want to stringify a single word, just stick
+        the str in a 1-length list and run batch_tokenize.
+        """
         split = list(s)
         assert set(split).issubset(set(self.allowed_letters)), "Toy Tokenizer only accepts letters, spaces, and .,!?." 
 
         # turn string into list of ids and then stick that into a vector 
         id_list=tls.tensor([ int(self.allowed_letters.index(letter)) for letter in split ])
-        print(type(id_list))
-        print(id_list.shape)
-        
-        return id_list
+        return id_list 
 
-    def batch_tokenize_and_pad(batch_strs: list[str], max_seq_len: int):
+    def batch_tokenize_and_pad(self, batch_strs: list[str], max_seq_len: int):
         """
         Returns a tensor of shape [len(batch_strs), max_seq_len], with entries padded at the end.
         """
         # run through each str, tokenize, then concat
-        batch_tensor = torch.empty(len(batch_strs), max_seq_len)
+        batch_tensor = tls.zeros(len(batch_strs), max_seq_len, dtype=int)
         for str_idx, string in enumerate(batch_strs):
-            vector = self.tokenize_str(string) # will be shape [len(string)]
-            batch_tensor[str_idx, 0:len(string)] = vector # insert vector in
+            split_str = list(string)
+            assert set(split_str).issubset(set(self.allowed_letters)), f"Problem with datapoint {str_idx}: Toy Tokenizer only accepts letters, spaces, and .,!?." 
+            assert len(string) <= max_seq_len, f"Datapoint {str_idx} exceeds maximum sequence length!"
+            vector = tls.tensor([ int(self.allowed_letters.index(letter)) for letter in split_str ], dtype=int)
+            batch_tensor[str_idx, 0:len(string)] = vector.unsqueeze(0) # insert vector in; reshape by adding dimension at front to broadcast correctly
             batch_tensor[len(string):] = self.pad_token_id # pad the remainder
         return batch_tensor # shape [len(batch_strs), max_seq_len]. will be padded
+
+    def batch_tokenize_and_pack():
+        """
+        TODO
+        """
+        pass
 
 class EmbeddingLayer(Module):
     def __init__(self, vocab_size: int, latent_dim: int):
@@ -73,8 +88,20 @@ class EmbeddingLayer(Module):
         self.E = Parameter(Tensor(self.vocab_size, self.latent_dim))
         tls.init.kaiming_normal_(self.E)
 
-    def forward(self, x: list) -> Tensor:
-       return self.E[x] # just read the rows rather than doing one-hot multiplication (wasting matmuls)
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Takes in a batch of [batch_size, max_seq_len] 
+        (possibly padded but that makes no diff)
+        Each entry is a class id.
+        We want
+        [batch_size, max_seq_len, latent_dim]
+        I still don't really understand how
+        advanced indexing works and would like to learn
+        about it someday. Might be good
+        to write a blog post about though that's probably
+        not counterfactual good time spent.
+        """
+        return self.E[x] # just read the rows rather than doing one-hot multiplication (wasting matmuls)
 
 
 class UnembeddingLayer(Module):
@@ -88,32 +115,6 @@ class UnembeddingLayer(Module):
 
     def forward(self, x: Tensor) -> Tensor:
        return einsum(x, self.E.t(), "... latent_dim, latent_dim vocab_size -> ... vocab_size")
-
-
-
-class ToyEmbedding(EmbeddingLayer): # aaaaagh that's not how embeddings work lol bruh it's just another layer
-    """
-    Takes in token IDs from ToyTokenizer
-    and trivially turns them into one-hots
-    with 1 in the token id place.
-
-    Should be a way to indicate it only takes stuff
-    from ToyTokenizer/ they fit together? IDK
-    Originally these were one component, but
-    I split them in two so we could have explicit
-    tokenizer/embed separations.
-    """
-    def __init__(self):
-        super(ToyEmbedding, self).__init__()
-        self.vocab_size = 27
-        self.latent_dim = 27
-
-    def embed(self, ids: list):
-        assert set(ids).issubset(set([i for i in range(27)])), "Toy Embedding only takes token ids from ToyTokenizer, with indices 0-26 inclusive."
-        embedded_tensor = tls.zeros(len(ids), 27) # All-zeros tensor
-        for seq_pos, idx, in enumerate(ids):
-            embedded_tensor[seq_pos, idx] = 1
-        return embedded_tensor
 
         
 """
@@ -331,7 +332,7 @@ def run_basic_tests():
     # TOKENIZER TEST
     s="abcd hello!!"
     toy_tokenizer = ToyTokenizer()
-    ids = toy_tokenizer.tokenize_str(s)
+    ids = toy_tokenizer._tokenize_str(s)
     # print(ids)
     try: 
         s = "hi*"
@@ -364,7 +365,7 @@ def run_basic_tests():
     num_mlp_layers = 4
     mlp_dimensions = [8,11, 17, 16, 8]
     latent_dim = 8
-    seq_len = 10
+    seq_len = 20
     n_heads = 4
     qk_dim = 4
     batch_size = 2
@@ -386,10 +387,11 @@ def run_basic_tests():
 
 
     num_blocks = 3 
-    
+
     transformer = StandardTransformer(num_blocks, toy_tokenizer, latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions)
-    s="yooo"
-    logits = transformer(s)
+    dataset = ["hi!!", "yo whats up", "wahooooooo"]
+    tok_dataset = toy_tokenizer.batch_tokenize_and_pad(dataset, seq_len)
+    logits = transformer(tok_dataset)
     # print(logits)
 
     print("Nice job, no errors!")
