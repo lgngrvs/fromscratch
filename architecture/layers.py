@@ -39,17 +39,32 @@ class ToyTokenizer(Tokenizer):
     """
     def __init__(self):
         super(ToyTokenizer, self).__init__()
-        self.vocab_size = 27
+        self.allowed_letters = list("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ.,!?")
+        self.vocab_size=len(self.allowed_letters)
+        self.pad_token_id =len(self.allowed_letters) + 1
         
-    def tokenize(self, s: str):
-        allowed_letters = list("abcdefghijklmnopqrstuvwxyz ")
+    def tokenize_str(self, s: str):
         split = list(s)
-        assert set(split).issubset(set(allowed_letters)), "Toy Tokenizer only accepts lowercase letters or spaces."
+        assert set(split).issubset(set(self.allowed_letters)), "Toy Tokenizer only accepts letters, spaces, and .,!?." 
 
-        # turn string into list of ids
-        id_list=[ allowed_letters.index(letter) for letter in split ]
+        # turn string into list of ids and then stick that into a vector 
+        id_list=tls.tensor([ int(self.allowed_letters.index(letter)) for letter in split ])
+        print(type(id_list))
+        print(id_list.shape)
+        
         return id_list
 
+    def batch_tokenize_and_pad(batch_strs: list[str], max_seq_len: int):
+        """
+        Returns a tensor of shape [len(batch_strs), max_seq_len], with entries padded at the end.
+        """
+        # run through each str, tokenize, then concat
+        batch_tensor = torch.empty(len(batch_strs), max_seq_len)
+        for str_idx, string in enumerate(batch_strs):
+            vector = self.tokenize_str(string) # will be shape [len(string)]
+            batch_tensor[str_idx, 0:len(string)] = vector # insert vector in
+            batch_tensor[len(string):] = self.pad_token_id # pad the remainder
+        return batch_tensor # shape [len(batch_strs), max_seq_len]. will be padded
 
 class EmbeddingLayer(Module):
     def __init__(self, vocab_size: int, latent_dim: int):
@@ -204,7 +219,7 @@ class MultiHeadAttention(Module):
         super(MultiHeadAttention, self).__init__()
         assert n_heads > 0, "n_heads must be positive" 
         if v_dim is None:
-            v_dim = int(round(latent_dim/seq_len))
+            v_dim = -(-latent_dim // n_heads) # round up
             
         self.latent_dim, self.seq_len, self.qk_dim, self.n_heads, self.v_dim = latent_dim, seq_len, qk_dim, n_heads, v_dim # Surely there is a better way to unpack these args
 
@@ -292,12 +307,11 @@ class StandardTransformer(Module):
         self.blocks = ModuleList([
             TransformerBlock(latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions, activ_func=activ_func, v_dim=v_dim, causal_mask=causal_mask) for l in range(self.num_blocks)
         ]) 
-        print(self.num_blocks)
         print(self.blocks)
         self.unembed = UnembeddingLayer(self.vocab_size, self.latent_dim, tied_weight=self.embed.E)
 
-    def forward(self, x: str):
-        x = self.embed(self.tokenizer.tokenize(x))
+    def forward(self, x: Tensor):
+        x = self.embed(x)
         for l in range(self.num_blocks): 
             x = self.blocks[l](x)
         x = self.unembed(x)
@@ -315,10 +329,18 @@ are no immediate errors.
 
 def run_basic_tests():
     # TOKENIZER TEST
-    s="abcd hello"
+    s="abcd hello!!"
     toy_tokenizer = ToyTokenizer()
-    ids = toy_tokenizer.tokenize(s)
+    ids = toy_tokenizer.tokenize_str(s)
     # print(ids)
+    try: 
+        s = "hi*"
+        ids = toy_tokenizer.tokenize_str(s)
+        #print(ids)
+        # should assertionerror since * is not in allowed tokens
+    except:
+        #print("Error correctly raised by tokenizer")
+        pass
 
 
     # SOFTMAX TEST
@@ -364,6 +386,7 @@ def run_basic_tests():
 
 
     num_blocks = 3 
+    
     transformer = StandardTransformer(num_blocks, toy_tokenizer, latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions)
     s="yooo"
     logits = transformer(s)
