@@ -38,8 +38,9 @@ class ToyTokenizer(Tokenizer):
         super(ToyTokenizer, self).__init__()
         # Letter position in allowed_letters also defines token id
         self.allowed_letters = list("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ.,!?")
-        self.vocab_size=len(self.allowed_letters) + 1 # inluding pad token
-        self.pad_token_id =len(self.allowed_letters) + 1
+        self.vocab_size=len(self.allowed_letters)+1 # not inluding pad token. I hope this doesn't cause problems! 
+        self.pad_token_id = len(self.allowed_letters)
+        print(self.pad_token_id)
         
     def _tokenize_str(self, s: str):
         """
@@ -72,8 +73,25 @@ class ToyTokenizer(Tokenizer):
             assert len(string) <= max_seq_len, f"Datapoint {str_idx} exceeds maximum sequence length!"
             vector = tls.tensor([ int(self.allowed_letters.index(letter)) for letter in split_str ], dtype=int)
             batch_tensor[str_idx, 0:len(string)] = vector.unsqueeze(0) # insert vector in; reshape by adding dimension at front to broadcast correctly
-            batch_tensor[len(string):] = self.pad_token_id # pad the remainder
-        return batch_tensor # shape [len(batch_strs), max_seq_len]. will be padded
+            batch_tensor[str_idx, len(string):] = self.pad_token_id # pad the remainder
+
+        labels = tls.cat((batch_tensor[:,1:], tls.zeros((len(batch_strs),1), dtype=int)), dim=-1)
+        return batch_tensor, labels # shape [len(batch_strs), max_seq_len]. will be padded
+    
+    def de_tokenize(self, batch_ids: Tensor):
+        strs_list = []
+        for seq_id in range(batch_ids.shape[0]):
+            string=""
+            for token_idx in range(len(batch_ids[seq_id, :])): 
+                token = batch_ids[seq_id, token_idx]
+                letter = list(self.allowed_letters)[token]
+                string += letter
+            strs_list.append(string)
+        return strs_list
+
+
+                
+        
 
     def batch_tokenize_and_pack():
         """
@@ -101,8 +119,7 @@ class EmbeddingLayer(Module):
         to write a blog post about though that's probably
         not counterfactual good time spent.
         """
-        return self.E[x] # just read the rows rather than doing one-hot multiplication (wasting matmuls)
-
+        return self.E[x] # just read the rows rather than doing one-hot multiplication (wasting matmletters 
 
 class UnembeddingLayer(Module):
     def __init__(self, vocab_size: int, latent_dim: int, tied_weight: Parameter=None):
@@ -126,7 +143,7 @@ def ReLU(x: Tensor):
     Literally ReLU.
     """
     mask = x < 0
-    x[mask] = 0
+    x = x * mask
     return x
 
 def softmax(x: Tensor, dim: int, masked: bool=False, mask_dim: int=None) -> Tensor:
@@ -143,7 +160,7 @@ def softmax(x: Tensor, dim: int, masked: bool=False, mask_dim: int=None) -> Tens
         mask_dims = [x.size(dim=mask_dim), x.size(dim=dim)] # get 2d mask shape
         inf_mask = tls.triu(tls.ones(mask_dims), diagonal=1) > 0 # triu with diag=1 gives you 1s, 1 above the regular diagonal; get binary mask using > 0 (entries >0 return true)
         # print(f"inf mask: {inf_mask}")
-        x.masked_fill_(inf_mask, -tls.inf)
+        x.masked_fill(inf_mask, -tls.inf)
         # print(f"masked x: {x}")
 
     x_exp = tls.exp(x) # exponentiates all the elements
@@ -275,9 +292,9 @@ class TransformerBlock(Module):
         self.ln_2 = LayerNorm()
 
     def forward(self, x):
-        x += self.mhsa(x)
+        x = x + self.mhsa(x)
         x = self.ln_1(x)
-        x += self.mlp(x)
+        x = x + self.mlp(x)
         x = self.ln_2(x)
         return x
 
@@ -308,7 +325,6 @@ class StandardTransformer(Module):
         self.blocks = ModuleList([
             TransformerBlock(latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions, activ_func=activ_func, v_dim=v_dim, causal_mask=causal_mask) for l in range(self.num_blocks)
         ]) 
-        print(self.blocks)
         self.unembed = UnembeddingLayer(self.vocab_size, self.latent_dim, tied_weight=self.embed.E)
 
     def forward(self, x: Tensor):
@@ -318,6 +334,21 @@ class StandardTransformer(Module):
         x = self.unembed(x)
         logits = softmax(x, dim=-1)
         return logits
+
+    def generate_rollout(self, prompt, max_generation_tokens):
+        tok, _ = self.tokenizer.batch_tokenize_and_pad([prompt], self.seq_len)
+        while tls.max(tok) == 57: # still padded (cursed setup)
+            # print(tok)
+            logits=self.forward(tok)[0, -1, :]
+            #print(logits)
+            #print(logits.shape)
+            generated_token = tls.argmax(logits)
+            first_pad_position = tls.argmax(tok)
+            # print(generated_token, first_pad_position)
+            tok[0,first_pad_position]=generated_token
+        print(tok)
+        return self.tokenizer.de_tokenize(tok)
+
 
 """
 ======== BASIC TESTS ========   
@@ -390,9 +421,11 @@ def run_basic_tests():
 
     transformer = StandardTransformer(num_blocks, toy_tokenizer, latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions)
     dataset = ["hi!!", "yo whats up", "wahooooooo"]
-    tok_dataset = toy_tokenizer.batch_tokenize_and_pad(dataset, seq_len)
+    tok_dataset, labels = toy_tokenizer.batch_tokenize_and_pad(dataset, seq_len)
     logits = transformer(tok_dataset)
     # print(logits)
+    print(tok_dataset)
+    print(labels)
 
     print("Nice job, no errors!")
 
