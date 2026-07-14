@@ -8,6 +8,8 @@ This repo contains, at the moment, bare-pytorch implementations of as many parts
 
 This repository contains *atelic* software: software built where the purpose lies in the process of building, not the end result. To repeat again, all code is be written by hand by me!
 
+![](loss_val_plot.png)
+
 ## Rules
 
 ### LLM Help

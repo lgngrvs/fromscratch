@@ -126,9 +126,11 @@ def train(model, dataset, labels, val_dataset, val_labels, batch_size: int, epoc
     plotext.subplots(2,1)
     plotext.theme("pro")
     plotext.subplot(1,1)
+    plotext.title("Loss")
     plotext.scatter(loss_history)
 
     plotext.subplot(2,1)
+    plotext.title("Validation Accuracy")
     plotext.hline(1.0)
     plotext.scatter(val_steps, val_history)
     plotext.show()
