@@ -190,6 +190,36 @@ def forward_with_logits(self, batch: Tensor):
 Module.forward_with_logits = forward_with_logits
 print("Successfully added method")
 
+
+def sinusoidal_pos_encode(batch: Tensor):
+    """
+    Expects batch tensor of shape [batch_size, seq_len, latent_dim]
+    For use after basic embedding matrix
+    We add the following to each dimension of each position:
+    Equation: pos,dim 2i += sin( seq_position / 1000^{2i/latent_dim})
+    Equation: pos, dim 2i+1 += cos( seq_position / 1000^{2i/latent_dim})
+
+    Idea: create the sin and cos tensors
+    and then interleave them.
+    Sin tensor is created as batch_size, seq_len, latent_dim
+    Cos tensor is batch_size, seq_len, latent_dim
+    Let's make seq_position tensor, then a 2i tensor 
+    (divide by latent dim and raise do 1000)
+    """
+    bs, seq_len, latent_dim = batch.shape
+    pos_tensor = tls.arange(seq_len).repeat(bs, 1).unsqueeze(-1).repeat(1,1,latent_dim)
+    # added //2 because you're supposed to just have 2i at each, not 2i+1
+    denom_tensor = 1000 ** ((tls.arange(latent_dim) // 2).repeat(bs, seq_len, 1) / latent_dim) 
+    full_tensor = pos_tensor / denom_tensor
+    full_tensor[:,:,0::2] = tls.sin(full_tensor[:,:,0::2]) 
+    full_tensor[:,:,1::2] = tls.cos(full_tensor[:,:,1::2]) 
+    return batch + full_tensor
+
+batch = tls.ones(3,5,4)
+print(sinusoidal_pos_encode(batch))
+
+
+
 class LayerNorm(Module):
     """
     Takes x of shape (batch, seq, latent)
@@ -318,7 +348,9 @@ class TransformerBlock(Module):
 
 class StandardTransformer(Module):
     """
-    A proper decoder-only transformer.
+    A proper decoder-only transformer done in the style
+    of Vaswani et al. No RoPE or anything, just standard
+    sinusoidal pos encode.
     """
     def __init__(self, 
             num_blocks: int,
@@ -340,6 +372,7 @@ class StandardTransformer(Module):
         self.vocab_size = tokenizer.vocab_size
 
         self.embed = EmbeddingLayer(self.vocab_size, self.latent_dim)
+        self.positional_encode = sinusoidal_pos_encode
         self.blocks = ModuleList([
             TransformerBlock(latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions, activ_func=activ_func, v_dim=v_dim, causal_mask=causal_mask) for l in range(self.num_blocks)
         ]) 
@@ -347,6 +380,7 @@ class StandardTransformer(Module):
 
     def forward(self, x: Tensor):
         x = self.embed(x)
+        x = self.positional_encode(x) # Goes after embed
         for l in range(self.num_blocks): 
             x = self.blocks[l](x)
         x = self.unembed(x)

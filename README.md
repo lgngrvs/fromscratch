@@ -2,11 +2,11 @@
 
 > You don't know something until you've built it yourself from scratch! 
 
-One day I would like to implement the whole language model stack from the bottom to the top, including the actual computer running it: like, operating system, up to cuda kernels, up to architecture, optimizers, and training algorithms. Today is not really that day. But one day this repo may eventually house all of that!
+One day I would like to implement the whole language model stack from the bottom to the top, including the actual computer running it: like, operating system, up to cuda kernels, up to architecture, optimizers, and training algorithms. Wouldn't it be fun if I wrote my own programming language or something for this!? Today is not really that day. But one day this repo may eventually house all of that!
 
 This repo contains, at the moment, bare-pytorch implementations of as many parts of the LLM stack as I can make, written by me by hand. Bare pytorch means I will use torch's basic computational primitives (e.g. `torch.sum` up to `Modules` and `Parameters`), but will not use any built in architectural components (e.g. `torch.nn.Linear`), optimizers, et cetera. The goal is to understand the process end-to-end. (I'd even like like to reduce or eliminate my dependence on Torch altogether --- write my own autodiff, kernels, et cetera --- but that's a long way down the road.) Eventually, I'll be using open data sources and following open research (e.g. OLMO, DeepSeek technical reports) to try and train my own langauge model. You might compare with Andrej Karpathy's Micrograd/NanoGPT projects but I did it myself so it's different and moderately worse.
 
-This repository contains *atelic* software: software built where the purpose lies in the process of building, not the end result. To repeat again, all code is be written by hand by me!
+This repository contains *atelic* software: software built where the purpose lies in the process of building, not the end result. To repeat again, all code is be written by hand by me! I'm not following any tutorials or anything, just implementing them straight from either my head or from whatever canonical paper they appear in.
 
 ![](loss_val_plot.png)
 *The loss/val plot from one of my first training runs with this library, training a transformer on a toy task.* 
