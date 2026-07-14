@@ -1,6 +1,7 @@
 import tools as tls
 from architecture.layers import ToyTokenizer, StandardTransformer
-from training.optimization import SGD, Optimizer, cross_entropy_loss
+from training.optimization import SGD, Optimizer, cross_entropy_loss, accuracy
+import plotext
 
 """
 SYNTHETIC DATA
@@ -44,9 +45,12 @@ TODO BEFORE TRAINING:
     [x] Implement loss function
     [x] Implement an optimizer
 [x] Implement dataset generation
-[ ] Implement positional encoding
-[ ] Implement ignoring tokens 
-[ ] Add training for other models
+Improvements:
+    [ ] Add validation set
+    [ ] Implement positional encoding
+    [ ] Implement ignoring tokens 
+    [ ] Implement loss graphing
+    [ ] Add training for other models
 
 """
 
@@ -79,12 +83,21 @@ DATASET_RAW=generate_alphabet_dataset(int(4096), length=SEQ_LEN)
 DATASET, LABELS = tokenizer.batch_tokenize_and_pad(DATASET_RAW, max_seq_len=SEQ_LEN)
 # print(DATASET)
 
+val_dataset=generate_alphabet_dataset(int(32), length=SEQ_LEN)
+VAL_DATASET, VAL_LABELS = tokenizer.batch_tokenize_and_pad(val_dataset, max_seq_len=SEQ_LEN)
 optimizer=SGD(model, LR)
+
 print("Initialization successful. Starting training.")
 
-def train(model, dataset, labels, batch_size: int, epochs: int, optimizer, loss_function=cross_entropy_loss):
+
+
+def train(model, dataset, labels, val_dataset, val_labels, batch_size: int, epochs: int, optimizer, loss_function=cross_entropy_loss, print_loss_freq: int = 5, val_freq: int = 50):
     print("Training started.")
     n_batches = -(len(dataset) // -batch_size) # divide and round up
+    loss_history=[]
+    val_history=[]
+    val_steps=[]
+    current_train_step=0
     for epoch in range(epochs):
         print("Beginning epoch", epoch)
         print(f"Running {n_batches} batches.")
@@ -96,15 +109,31 @@ def train(model, dataset, labels, batch_size: int, epochs: int, optimizer, loss_
             else: 
                 batch = dataset[batch_size * batch_idx : batch_size * (batch_idx + 1)]
                 batch_labels = labels[batch_size * batch_idx : batch_size * (batch_idx + 1)]
-
             logits = model(batch)
-            loss = loss_function(logits, batch_labels)
-            print("Loss: ", loss.item())
+            loss = loss_function(logits, batch_labels, ignore_token_id=tokenizer.pad_token_id)
+            loss_history.append(loss.item())
             loss.backward() # computes the gradient of the parameters wrt the loss. You can access the gradient using Tensor.grad. This is what we will be doing.
             optimizer.step() # The optimizer already has the model loaded into it, and will access the gradients that way directly. Thus, all we need to do is tell the optimizer to take a step in the direction of that gradient we've accumulated.
+            if current_train_step % print_loss_freq == 0:
+                print(f"Loss at step {current_train_step}: {loss.item()}")
+            if current_train_step % val_freq == 0: 
+                with tls.no_grad():
+                    val_acc = accuracy(model(val_dataset), val_labels, ignore_token_id=tokenizer.pad_token_id)
+                    val_history.append(val_acc.item())
+                    val_steps.append(current_train_step)
+                    print(f"Validation accuracy at step {current_train_step}: {val_acc.item()}")
+            current_train_step+=1
+    plotext.subplots(2,1)
+    plotext.theme("pro")
+    plotext.subplot(1,1)
+    plotext.scatter(loss_history)
 
-train(model, DATASET, LABELS, BATCH_SIZE, EPOCHS, optimizer)
+    plotext.subplot(2,1)
+    plotext.hline(1.0)
+    plotext.scatter(val_steps, val_history)
+    plotext.show()
 
+train(model, DATASET, LABELS, VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, optimizer)
 
 prompts=["aaaa", "abcd", "bcde" "fghi", "JKL", "wahoo!" "ahsoeh"]
 

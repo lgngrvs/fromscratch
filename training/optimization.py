@@ -51,11 +51,23 @@ def cross_entropy_loss(y_pred: Tensor, labels: Tensor, ignore_token_id: int=-100
     so we need to unsqueeze the labels to get
     that extra necessary dimension.
     """
-    relevant_logits = y_pred.gather(-1, labels.unsqueeze(-1)) # gathering along last dim
+    relevant_logits = y_pred.gather(-1, labels.unsqueeze(-1)).squeeze() # gathering along last dim; now the same shape as the labels after squeezing to remove singleton
+    ignore_positions_mask = (labels == ignore_token_id) 
+    relevant_logits = relevant_logits.masked_fill(ignore_positions_mask, 1.0) # fills with 1, and log(1)=0 so this will no longer contribute to the loss
     loss = -tls.sum(tls.log(relevant_logits)) 
-    # needs to ignore padded tokens! Currently broken!
     return loss
 
+
+def accuracy(y_pred: Tensor, labels: Tensor, ignore_token_id: int=-100): # ignore token id has changed
+    y_pred_ids=tls.argmax(y_pred, dim=-1).flatten() # now same shape as a label since dim=-1 removed
+    ignore_positions_mask = (labels == ignore_token_id).flatten()
+    # incorrect_mask = (y_pred_ids == labels.flatten())
+    # print("wrong acc:", tls.sum(incorrect_mask)/tls.numel(labels))
+    kept_preds= y_pred_ids[ignore_positions_mask == False]
+    kept_labels = labels.flatten()[ignore_positions_mask == False]
+    correct_mask = (kept_preds == kept_labels)
+    acc = tls.sum(correct_mask)/tls.numel(kept_preds)
+    return acc
 
 """
 Optimizers

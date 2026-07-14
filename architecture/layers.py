@@ -75,7 +75,7 @@ class ToyTokenizer(Tokenizer):
             batch_tensor[str_idx, 0:len(string)] = vector.unsqueeze(0) # insert vector in; reshape by adding dimension at front to broadcast correctly
             batch_tensor[str_idx, len(string):] = self.pad_token_id # pad the remainder
 
-        labels = tls.cat((batch_tensor[:,1:], tls.zeros((len(batch_strs),1), dtype=int)), dim=-1)
+        labels = tls.cat((batch_tensor[:,1:], tls.full((len(batch_strs),1), self.pad_token_id, dtype=int)), dim=-1)
         return batch_tensor, labels # shape [len(batch_strs), max_seq_len]. will be padded
     
     def de_tokenize(self, batch_ids: Tensor):
@@ -160,7 +160,7 @@ def softmax(x: Tensor, dim: int, masked: bool=False, mask_dim: int=None) -> Tens
         mask_dims = [x.size(dim=mask_dim), x.size(dim=dim)] # get 2d mask shape
         inf_mask = tls.triu(tls.ones(mask_dims), diagonal=1) > 0 # triu with diag=1 gives you 1s, 1 above the regular diagonal; get binary mask using > 0 (entries >0 return true)
         # print(f"inf mask: {inf_mask}")
-        x.masked_fill(inf_mask, -tls.inf)
+        x = x.masked_fill(inf_mask, -tls.inf) # not an in_place operation
         # print(f"masked x: {x}")
 
     x_exp = tls.exp(x) # exponentiates all the elements
@@ -339,14 +339,16 @@ class StandardTransformer(Module):
         tok, _ = self.tokenizer.batch_tokenize_and_pad([prompt], self.seq_len)
         while tls.max(tok) == 57: # still padded (cursed setup)
             # print(tok)
-            logits=self.forward(tok)[0, -1, :]
+            first_pad_position=tls.argmax(tok[0,:]) #this only works for tokenizers with max token id = pad token
+            # will need better engineering for arbitrary pad ids
+            logits=self.forward(tok)[0, first_pad_position-1, :]
             #print(logits)
             #print(logits.shape)
             generated_token = tls.argmax(logits)
             first_pad_position = tls.argmax(tok)
             # print(generated_token, first_pad_position)
             tok[0,first_pad_position]=generated_token
-        print(tok)
+        # print(tok)
         return self.tokenizer.de_tokenize(tok)
 
 

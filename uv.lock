@@ -102,6 +102,8 @@ source = { editable = "." }
 dependencies = [
     { name = "einops" },
     { name = "numpy" },
+    { name = "plotext" },
+    { name = "terminalplot" },
     { name = "torch" },
 ]
 
@@ -114,6 +116,8 @@ dev = [
 requires-dist = [
     { name = "einops", specifier = ">=0.8.2" },
     { name = "numpy", specifier = ">=2.5.1" },
+    { name = "plotext", specifier = ">=5.3.2" },
+    { name = "terminalplot", specifier = ">=0.4.0" },
     { name = "torch", specifier = ">=2.13.0" },
 ]
 
@@ -426,6 +430,15 @@ wheels = [
 ]
 
 [[package]]
+name = "plotext"
+version = "5.3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/d7/f75f397af966fe252d0d34ffd3cae765317fce2134f925f95e7d6725d1ce/plotext-5.3.2.tar.gz", hash = "sha256:52d1e932e67c177bf357a3f0fe6ce14d1a96f7f7d5679d7b455b929df517068e", size = 61967, upload-time = "2024-09-24T15:13:37.728Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/1e/12fe7c40cd2099a1f454518754ed229b01beaf3bbb343127f0cc13ce6c22/plotext-5.3.2-py3-none-any.whl", hash = "sha256:394362349c1ddbf319548cfac17ca65e6d5dfc03200c40dfdc0503b3e95a2283", size = 64047, upload-time = "2024-09-24T15:13:36.296Z" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.15.21"
 source = { registry = "https://pypi.org/simple" }
@@ -469,6 +482,14 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
+]
+
+[[package]]
+name = "terminalplot"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/53/2a/29ee46e81aaaac0621b52e95149f9b3fb4aabdb55e59d51cadbdc8ca0bcb/terminalplot-0.4.0-py3-none-any.whl", hash = "sha256:57349ef0e4668db8277ec65dbb1a30d01491587469394e3667465fe981ecd2b1", size = 30131, upload-time = "2023-09-29T23:30:25.53Z" },
 ]
 
 [[package]]
