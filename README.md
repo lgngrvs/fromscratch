@@ -9,6 +9,8 @@ This repo contains, at the moment, bare-pytorch implementations of as many parts
 This repository contains *atelic* software: software built where the purpose lies in the process of building, not the end result. To repeat again, all code is be written by hand by me!
 
 ![](loss_val_plot.png)
+*The loss/val plot from one of my first training runs with this library, training a transformer on a toy task.* 
+
 
 ## Rules
 

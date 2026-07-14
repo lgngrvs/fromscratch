@@ -29,7 +29,6 @@ class Tokenizer():
     pass
     
 
-# is this a module?
 class ToyTokenizer(Tokenizer):
     """
     Toy character-level tokenizer for testing.
@@ -40,7 +39,7 @@ class ToyTokenizer(Tokenizer):
         self.allowed_letters = list("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ.,!?")
         self.vocab_size=len(self.allowed_letters)+1 # not inluding pad token. I hope this doesn't cause problems! 
         self.pad_token_id = len(self.allowed_letters)
-        print(self.pad_token_id)
+        # print(self.pad_token_id)
         
     def _tokenize_str(self, s: str):
         """
@@ -173,6 +172,24 @@ def softmax(x: Tensor, dim: int, masked: bool=False, mask_dim: int=None) -> Tens
 ======== MODULES ========
 """
 
+def forward_with_logits(self, batch: Tensor):
+    """
+    Wrapper for non-transformer models; just calls
+    Turns class labels into one-hot vectors, runs
+    forward() on the model and then applies softmax
+    to it.
+    """ 
+    scores = self.forward(batch)
+    logits = softmax(scores, dim=-1)
+    return logits
+    
+# Registers this method for every Module object.
+# Not really best practice, but is I think better
+# than creating a parent object just to add this
+# simgle method.
+Module.forward_with_logits = forward_with_logits
+print("Successfully added method")
+
 class LayerNorm(Module):
     """
     Takes x of shape (batch, seq, latent)
@@ -221,7 +238,8 @@ class MLP(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         for l in range(self.n_layers):
-            # print(x)
+            # print(f"x.shape: {x.shape}")
+            # print(f"layer.shape: {self.layers[l].w.shape}")
             x = self.layers[l](x)
             # print(x)
             if l < self.n_layers - 1:
@@ -335,7 +353,12 @@ class StandardTransformer(Module):
         logits = softmax(x, dim=-1)
         return logits
 
-    def generate_rollout(self, prompt, max_generation_tokens):
+    def generate_rollout(self, prompt, max_generation_tokens, sampling_method:str="greedy"):
+        """
+        Returns a completion for a single prompt. Also only supports greedy decoding right now so the sampling_method is a no_op.
+        All-around cursed and will need to be replaced once generating
+        rollouts is something that is more useful.
+        """
         tok, _ = self.tokenizer.batch_tokenize_and_pad([prompt], self.seq_len)
         while tls.max(tok) == 57: # still padded (cursed setup)
             # print(tok)
@@ -426,8 +449,8 @@ def run_basic_tests():
     tok_dataset, labels = toy_tokenizer.batch_tokenize_and_pad(dataset, seq_len)
     logits = transformer(tok_dataset)
     # print(logits)
-    print(tok_dataset)
-    print(labels)
+    # print(tok_dataset)
+    # print(labels)
 
     print("Nice job, no errors!")
 

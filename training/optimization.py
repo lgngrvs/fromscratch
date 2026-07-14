@@ -70,9 +70,9 @@ def accuracy(y_pred: Tensor, labels: Tensor, ignore_token_id: int=-100): # ignor
     return acc
 
 """
-Optimizers
+Optimizers need:
 - init
--step 
+- step 
 - zero grad
 """
 
@@ -99,32 +99,35 @@ class SGD(Optimizer):
         for param in self.model.parameters():
             param.grad = tls.zeros_like(param, requires_grad=False)
 
-import architecture.layers
-NUM_BLOCKS = 2 # VERY SIMPLE
-LATENT_DIM = 8
-SEQ_LEN = 20
-N_HEADS = 2
-QK_DIM = 4
-NUM_MLP_LAYERS = 2
-MLP_DIMENSIONS = [LATENT_DIM, LATENT_DIM*2, LATENT_DIM]
-BATCH_SIZE = 2
-
-tokenizer = architecture.layers.ToyTokenizer()
-transformer = architecture.layers.StandardTransformer(NUM_BLOCKS, tokenizer, LATENT_DIM, SEQ_LEN, QK_DIM, N_HEADS, NUM_MLP_LAYERS, MLP_DIMENSIONS)
 
 
-dataset, labels = tokenizer.batch_tokenize_and_pad(["hi", "wahoooo"], SEQ_LEN)
-logits = transformer(dataset)
-loss = cross_entropy_loss(logits, labels)
-import torch.autograd
-torch.autograd.set_detect_anomaly(True, check_nan=False)
-loss.backward()
+if __name__=="main":
+    import architecture.layers
+    NUM_BLOCKS = 2 # VERY SIMPLE
+    LATENT_DIM = 8
+    SEQ_LEN = 20
+    N_HEADS = 2
+    QK_DIM = 4
+    NUM_MLP_LAYERS = 2
+    MLP_DIMENSIONS = [LATENT_DIM, LATENT_DIM*2, LATENT_DIM]
+    BATCH_SIZE = 2
 
-optim = SGD(transformer, 1e-3)
-optim.step()
+    tokenizer = architecture.layers.ToyTokenizer()
+    transformer = architecture.layers.StandardTransformer(NUM_BLOCKS, tokenizer, LATENT_DIM, SEQ_LEN, QK_DIM, N_HEADS, NUM_MLP_LAYERS, MLP_DIMENSIONS)
 
-optim.zero_grad()
-optim.step()
+
+    dataset, labels = tokenizer.batch_tokenize_and_pad(["hi", "wahoooo"], SEQ_LEN)
+    logits = transformer(dataset)
+    loss = cross_entropy_loss(logits, labels)
+    import torch.autograd
+    torch.autograd.set_detect_anomaly(True, check_nan=False)
+    loss.backward()
+
+    optim = SGD(transformer, 1e-3)
+    optim.step()
+
+    optim.zero_grad()
+    optim.step()
 
 
 

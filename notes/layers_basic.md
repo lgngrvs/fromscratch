@@ -48,3 +48,40 @@ Alright! Well, I have a transformer that runs without bugs. That does not mean a
 I've been working for like 5h or something. Spent soo much time today on this and I'm really having a good time. It's incredibly satisfying.
 
 Looking forward to cleaning up the files and running training soon :D
+
+## Training
+
+Ok i implemented the training stuff. All that's left is optimization --- I think we're quite close.
+Was laughing at the message that pytorch gives you when your backward() fails:
+
+"""
+112 LMFAO:
+113 RuntimeError: one of the variables needed for gradient computation has been modified by an inplace         operatio
+114 n: [torch.FloatTensor [1, 40, 8]], which is output 0 of AsStrided, is at version 1; expected version 0     inst
+115 ead. Hint: the backtrace further above shows the operation that failed to compute its gradient. The        variabl
+116 e in question was changed in there or anywhere later. Good luck!
+117
+118 I think this is one very good thing for claude to help with.
+119 Recognized issues:
+120 - +=
+121 - setting variables x[mask]=0 instead of x = x * mask
+122 - masked_fill_ instead of masked_fill (inplace)
+123 """
+
+This is the kind of thing that I am really really glad I have claude for! I asked claude to find the inplace ops and claude found 3 mentioned above. Updated them and immediately it was all solved --- saved me hours probably.
+
+Claude also helped me understand some advanced slicing stuff (but I still don't really understand it --- will require some additional thought that I don't think is worthwhile at the moment). glorious!
+
+
+
+## OK! We have naive training running! I have added plotting, validation set testing during training, and can now train arbitrary modules using forward_with_logits and pre-one-hotting the dataset.
+
+This is freaking awesome!! I'm having so much fun. My guys are learning!! I can't wait to do more stuff. Next thing to do is add positional encoding (lol forgot) and a learning rate scheduler most likely.
+
+Ooooh i can creeate special tokens.... and create a chat template.... do you need RL to teach the model to use a chat template? presumably yes. that's a great toy task
+
+so far I haven't run into any real challenges, only some bugs that I've fixed. The tokenization and embedding stuff has been moderately annoying. It's fun that such a naive setup is working (though i guess it's not really naive, the transformer is so complex... though I'm also training an MLP to do it)
+
+I think it would be fun to create all kinds of toy tasks and see which ones the different networks can learn
+
+i'm so damn excited this is such a good time. need to figure out what's next on the agenda
