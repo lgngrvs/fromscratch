@@ -36,7 +36,7 @@ class ToyTokenizer(Tokenizer):
     def __init__(self):
         super(ToyTokenizer, self).__init__()
         # Letter position in allowed_letters also defines token id
-        self.allowed_letters = list("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ.,!?")
+        self.allowed_letters = list("abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ.,!?0123456789")
         self.vocab_size=len(self.allowed_letters)+1 # not inluding pad token. I hope this doesn't cause problems! 
         self.pad_token_id = len(self.allowed_letters)
         # print(self.pad_token_id)
@@ -63,6 +63,13 @@ class ToyTokenizer(Tokenizer):
     def batch_tokenize_and_pad(self, batch_strs: list[str], max_seq_len: int):
         """
         Returns a tensor of shape [len(batch_strs), max_seq_len], with entries padded at the end.
+        mask_positions allows you to mask out certain string positions from the
+        loss by setting their labels to pad tokens, which are ignored by the
+        loss function. mask_positions should be a binary tensor of shape 
+        [batch_size, seq_len] where 0 indicates positions to be ignored
+
+        Realizing that having the masking happen here doesn't really make
+        sense... not exactly sure the right way to engineer the masking
         """
         # run through each str, tokenize, then concat
         batch_tensor = tls.zeros(len(batch_strs), max_seq_len, dtype=int)
@@ -73,7 +80,6 @@ class ToyTokenizer(Tokenizer):
             vector = tls.tensor([ int(self.allowed_letters.index(letter)) for letter in split_str ], dtype=int)
             batch_tensor[str_idx, 0:len(string)] = vector.unsqueeze(0) # insert vector in; reshape by adding dimension at front to broadcast correctly
             batch_tensor[str_idx, len(string):] = self.pad_token_id # pad the remainder
-
         labels = tls.cat((batch_tensor[:,1:], tls.full((len(batch_strs),1), self.pad_token_id, dtype=int)), dim=-1)
         return batch_tensor, labels # shape [len(batch_strs), max_seq_len]. will be padded
     
@@ -88,9 +94,33 @@ class ToyTokenizer(Tokenizer):
             strs_list.append(string)
         return strs_list
 
+    def _apply_shifted_mask(self, labels: Tensor, mask: Tensor):
+        """
+        Helper function. Accepts a *shifted* mask and returns
+        a labels tensor with the shifted mask replaced by pad
+        tokens.
+        """
+        assert not ((mask != 0) == (mask != 1)).any() #all entries must be 0 or 1 in the mask. 
+        inverted_mask = (mask == 0)
+        labels = labels.masked_fill(inverted_mask, self.pad_token_id)
+        return labels
 
-                
-        
+    def _shift_and_pad(self, original_tensor: Tensor, in_binary_mode=False):
+        """
+        Shifts a labels or mask tensor of shape [n_datapoints, seq_len]
+        one to the left, and swaps in pad_token_to_use at the end.
+        """
+        if in_binary_mode: 
+           pad_token_to_use = 0 # 0s are excluded from masks customarily 
+        else: 
+            pad_token_to_use = self.pad_token_id
+        n_datapoints = original_tensor.shape[0]
+        shifted = tls.cat((original_tensor[:,1:], tls.full((n_datapoints,1), pad_token_to_use, dtype=int)), dim=-1) # shifts 1 index and replaces with pad token
+        return shifted
+
+
+
+
 
     def batch_tokenize_and_pack():
         """
@@ -140,8 +170,11 @@ class UnembeddingLayer(Module):
 def ReLU(x: Tensor):
     """
     Literally ReLU.
+    LOL I still somehow
+    managed to have a bug
+    in here. 
     """
-    mask = x < 0
+    mask = x > 0
     x = x * mask
     return x
 
@@ -214,10 +247,6 @@ def sinusoidal_pos_encode(batch: Tensor):
     full_tensor[:,:,0::2] = tls.sin(full_tensor[:,:,0::2]) 
     full_tensor[:,:,1::2] = tls.cos(full_tensor[:,:,1::2]) 
     return batch + full_tensor
-
-batch = tls.ones(3,5,4)
-print(sinusoidal_pos_encode(batch))
-
 
 
 class LayerNorm(Module):
@@ -306,9 +335,9 @@ class MultiHeadAttention(Module):
         V = einsum(x, self.W_v, "... seq lat, lat heads dv -> ... seq heads dv") 
 
         QK = einsum(Q, K, "... seq1 heads dqk, ... seq2 heads dqk -> ... heads seq1 seq2") # I don't think I actually get how this one works. Einsum is letting me get away with shit.
-        QK_dk = QK * (tls.ones_like(QK) * tls.sqrt(tls.tensor(self.qk_dim)))
+        QK_dk = QK * (tls.ones_like(QK) * tls.reciprocal(tls.sqrt(tls.tensor(self.qk_dim))))
         attention_scores = softmax(QK_dk, dim=-1, masked=True, mask_dim=-2)
-        sQKV = einsum(attention_scores, V, "... heads seq seq, ... seq heads dv -> ... seq heads dv").flatten(-2,-1) # flatten to concatenate heads back together
+        sQKV = einsum(attention_scores, V, "... heads seq1 seq2, ... seq2 heads dv -> ... seq1 heads dv").flatten(-2,-1) # flatten to concatenate heads back together
         out = einsum(sQKV, self.W_o, "... seq o_dim, o_dim latent_dim-> ... seq latent_dim") 
         return out
 
@@ -363,16 +392,22 @@ class StandardTransformer(Module):
             mlp_dimensions:list[int], 
             activ_func:Callable[[Tensor], Tensor] = ReLU, 
             v_dim: int = None, 
-            causal_mask: bool = False
+            causal_mask: bool = False,
+            positional_encoding_name: str = "sinusoidal"
     ):
         super(StandardTransformer, self).__init__()
 
-        self.num_blocks, self.tokenizer, self.latent_dim, self.seq_len, self.qk_dim, self.n_heads, self.num_mlp_layers, self.mlp_dimensions, self.activ_func, self.v_dim, self.causal_mask= num_blocks, tokenizer, latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions, activ_func, v_dim, causal_mask # Surely there is a better way to unpack these args. I feel like a total slopper
+        self.num_blocks, self.tokenizer, self.latent_dim, self.seq_len, self.qk_dim, self.n_heads, self.num_mlp_layers, self.mlp_dimensions, self.activ_func, self.v_dim, self.causal_mask, self.positional_encoding_name= num_blocks, tokenizer, latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions, activ_func, v_dim, causal_mask, positional_encoding_name
+        # Surely there is a better way to unpack these args. I feel like a total slopper
+
         
         self.vocab_size = tokenizer.vocab_size
 
         self.embed = EmbeddingLayer(self.vocab_size, self.latent_dim)
-        self.positional_encode = sinusoidal_pos_encode
+
+        if self.positional_encoding_name == "sinusoidal":
+            self.positional_encode = sinusoidal_pos_encode
+            
         self.blocks = ModuleList([
             TransformerBlock(latent_dim, seq_len, qk_dim, n_heads, num_mlp_layers, mlp_dimensions, activ_func=activ_func, v_dim=v_dim, causal_mask=causal_mask) for l in range(self.num_blocks)
         ]) 
@@ -380,7 +415,10 @@ class StandardTransformer(Module):
 
     def forward(self, x: Tensor):
         x = self.embed(x)
-        x = self.positional_encode(x) # Goes after embed
+        if self.positional_encoding_name == "sinusoidal":
+            #save_x = x.clone()
+            x = self.positional_encode(x) # Goes after embed
+            #print(x - save_x)
         for l in range(self.num_blocks): 
             x = self.blocks[l](x)
         x = self.unembed(x)
@@ -432,6 +470,10 @@ def run_basic_tests():
     except:
         #print("Error correctly raised by tokenizer")
         pass
+
+    batch = tls.ones(3,5,4)
+    print(sinusoidal_pos_encode(batch))
+
 
 
     # SOFTMAX TEST

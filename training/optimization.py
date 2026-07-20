@@ -58,13 +58,15 @@ def cross_entropy_loss(y_pred: Tensor, labels: Tensor, ignore_token_id: int=-100
     return loss
 
 
-def accuracy(y_pred: Tensor, labels: Tensor, ignore_token_id: int=-100): # ignore token id has changed
+def accuracy(y_pred: Tensor, labels: Tensor, ignore_token_id: int=67): # ignore token id has changed
     y_pred_ids=tls.argmax(y_pred, dim=-1).flatten() # now same shape as a label since dim=-1 removed
     ignore_positions_mask = (labels == ignore_token_id).flatten()
     # incorrect_mask = (y_pred_ids == labels.flatten())
     # print("wrong acc:", tls.sum(incorrect_mask)/tls.numel(labels))
     kept_preds= y_pred_ids[ignore_positions_mask == False]
+    #print("Predictions: ", kept_preds[0:30])
     kept_labels = labels.flatten()[ignore_positions_mask == False]
+    #print("Labels: ", kept_labels[0:30])
     correct_mask = (kept_preds == kept_labels)
     acc = tls.sum(correct_mask)/tls.numel(kept_preds)
     return acc

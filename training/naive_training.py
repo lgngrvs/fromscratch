@@ -1,4 +1,5 @@
 import tools as tls
+from tools import Tensor
 from architecture.layers import ToyTokenizer, StandardTransformer, MLP, Tokenizer, MultiHeadAttention
 from training.optimization import SGD, Optimizer, cross_entropy_loss, accuracy
 import plotext as pltxt
@@ -11,7 +12,7 @@ TODO BEFORE TRAINING:
 [x] Implement dataset generation
 Improvements:
     [x] Add validation set
-    [ ] Implement positional encoding
+    [x] Implement positional encoding
     [x] Implement ignoring tokens 
     [x] Implement loss graphing
     [ ] Add training for other models
@@ -42,6 +43,59 @@ def generate_alphabet_dataset(n_datapoints: int, length: int = 26):
     for offset in offsets:
         dataset.append(string[offset:offset+length])
     return dataset
+
+"""
+Trying to figure out a dataset that a model without positional encoding *could not*
+learn. The idea behind positional encoding is that the softmax attention doesn't
+have positional information; in theory, the tokens could be arbitrarily
+rearranged and their scores would be the same.
+"""
+
+
+def generate_positional_test_dataset(n_datapoints:int, max_length: int=24):
+    """
+    Generates strings filled with 4 character groups,
+    where the fourth character is a letter and the 
+    first 3 characters are a binary encoding of it. 
+    The model should be unable to learn the task
+    without positional encoding --- in theory.
+    
+    In reality, there's this kind of crazy paper
+    https://arxiv.org/pdf/2203.16634 that shows
+    that transformers learn positional encodings
+    *just* from the causal mask somehow. 
+    
+    give me max_length 99. then divide by 3s to get 33 datapoints of 4 each that's the problem
+    """
+    #encodings = ["000", "001", "010","011", "100", "101", "110", "111"]
+    #letters = ["A", "B", "C", "D", "E", "F", "G", "H"]
+    #indices=tls.randint(0,7, (n_datapoints, max_length // (len(encodings)+1))) # tensor filled with indices
+    encodings = ["0010", "0100", "1000"]
+    letters = ["B", "C", "D"]
+
+    indices=tls.randint(0,len(encodings), (n_datapoints, max_length // (len(encodings[0])+1))) # tensor filled with indices
+    dataset = []
+    for dp_i in range(n_datapoints):
+        dataset.append("".join([ encodings[indices[dp_i, i]] +letters[indices[dp_i, i]] for i in range(max_length // (len(encodings[0])+1))]))
+    return dataset
+
+def generate_positional_test_mask(tokenized_dataset: Tensor):
+    """
+    Takes in the dataset and creates a padding mask of the correct shape
+    so that the binary is ignored, and only the BCD parts are trained on.
+    """
+    n_datapoints, seq_len = tokenized_dataset.shape
+    mask = tls.zeros_like(tokenized_dataset)
+    mask[:,4::5] = 1
+    return mask
+
+
+    
+    
+
+"""
+TRAINING UTILS
+"""
 
 
 def plot_train_val_curves(loss_history: list[float], val_history: list[float], val_steps: list[int]):
@@ -80,8 +134,7 @@ def train(model, dataset, labels, val_dataset, val_labels, batch_size: int, epoc
     val_steps=[]
     current_train_step=0
     for epoch in range(epochs):
-        print("Beginning epoch", epoch)
-        print(f"Running {n_batches} batches.")
+        print("Beginning epoch", epoch, f" and running {n_batches} batches.")
         for batch_idx in range(n_batches):
             optimizer.zero_grad() # Zeros out the gradient at the beginning of the training step.
             if batch_idx == n_batches - 1:
@@ -118,6 +171,7 @@ if __name__ == "__main__":
     """
     Runs the naive training script.
     """
+    
 
 
     """
@@ -132,26 +186,48 @@ if __name__ == "__main__":
     """
     TRAIN A TRANSFORMER
     """
-    EPOCHS=2
+    EPOCHS=40
 
 
     NUM_BLOCKS = 2 # VERY SIMPLE
-    LATENT_DIM = 8
-    SEQ_LEN = 27
+    LATENT_DIM = 16
+    SEQ_LEN = 99
     N_HEADS = 2
     QK_DIM = 4
     NUM_MLP_LAYERS = 2
     MLP_DIMENSIONS = [LATENT_DIM, LATENT_DIM*2, LATENT_DIM]
 
     MODEL = StandardTransformer(NUM_BLOCKS, TOKENIZER, LATENT_DIM, SEQ_LEN, QK_DIM, N_HEADS, NUM_MLP_LAYERS, MLP_DIMENSIONS)
-    DATASET_RAW=generate_alphabet_dataset(int(4096), length=SEQ_LEN)
-    DATASET, LABELS = TOKENIZER.batch_tokenize_and_pad(DATASET_RAW, max_seq_len=SEQ_LEN)
-    val_dataset=generate_alphabet_dataset(int(32), length=SEQ_LEN)
-    VAL_DATASET, VAL_LABELS = TOKENIZER.batch_tokenize_and_pad(val_dataset, max_seq_len=SEQ_LEN)
+    NO_EMBED_MODEL = StandardTransformer(NUM_BLOCKS, TOKENIZER, LATENT_DIM, SEQ_LEN, QK_DIM, N_HEADS, NUM_MLP_LAYERS, MLP_DIMENSIONS, positional_encoding_name="none")
+
+    positional_testing = True 
+
+    if positional_testing:
+        DATASET_RAW = generate_positional_test_dataset(4000, max_length = SEQ_LEN)
+        DATASET, LABELS = TOKENIZER.batch_tokenize_and_pad(DATASET_RAW, max_seq_len=SEQ_LEN)
+        # Mask out the binary labels
+        MASK = generate_positional_test_mask(DATASET)
+        # I haven't figured out the right workflow for the masking so for now we're doing this
+        LABELS = TOKENIZER._apply_shifted_mask(LABELS, TOKENIZER._shift_and_pad(MASK, in_binary_mode=True))
+
+        # damn i should just chop off the end of a longer datapoints tensor...
+
+        val_dataset=generate_positional_test_dataset(20, max_length=SEQ_LEN)
+        VAL_DATASET, VAL_LABELS = TOKENIZER.batch_tokenize_and_pad(val_dataset, max_seq_len=SEQ_LEN)
+        VAL_MASK = generate_positional_test_mask(VAL_DATASET)
+        VAL_LABELS = TOKENIZER._apply_shifted_mask(VAL_LABELS, TOKENIZER._shift_and_pad(VAL_MASK, in_binary_mode=True))
+        print(VAL_LABELS)
+
+    else: 
+        DATASET_RAW=generate_alphabet_dataset(int(4096), length=SEQ_LEN)
+        DATASET, LABELS = TOKENIZER.batch_tokenize_and_pad(DATASET_RAW, max_seq_len=SEQ_LEN)
+
+
     OPTIMIZER=SGD(MODEL, LR)
+    OPTIMIZER_NO_EMBED=SGD(NO_EMBED_MODEL, LR)
 
-    train(MODEL, DATASET, LABELS, VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, OPTIMIZER)
-
+    train(MODEL, DATASET, LABELS, VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, OPTIMIZER, print_loss_freq=20)
+    train(NO_EMBED_MODEL, DATASET, LABELS, VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, OPTIMIZER_NO_EMBED,print_loss_freq=20)
 
     """
     TRAIN AN MLP
@@ -159,7 +235,6 @@ if __name__ == "__main__":
     EPOCHS=2
 
     VOCAB_SIZE=TOKENIZER.vocab_size
-    print(VOCAB_SIZE)
     NUM_MLP_ONLY_LAYERS = 1
     MLP_ONLY_DIMENSIONS = [VOCAB_SIZE, VOCAB_SIZE] 
     
@@ -171,7 +246,7 @@ if __name__ == "__main__":
     OH_TRAIN_DATASET=tls.one_hot(DATASET, num_classes=VOCAB_SIZE).float()
 
 
-    train(MLP_MODEL, OH_TRAIN_DATASET, LABELS, OH_VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, MLP_OPTIMIZER, using_forward_with_logits=True, tokenizer=TOKENIZER)
+    #train(MLP_MODEL, OH_TRAIN_DATASET, LABELS, OH_VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, MLP_OPTIMIZER, using_forward_with_logits=True, tokenizer=TOKENIZER)
 
 
     # val_ds_responses=tls.argmax(MLP_MODEL.forward_with_logits(OH_VAL_DATASET), dim=-1)
@@ -186,5 +261,5 @@ if __name__ == "__main__":
     SINGLE_HEAD = MultiHeadAttention(58, SEQ_LEN, QK_DIM, N_HEADS)
     HEAD_OPTIMIZER = SGD(SINGLE_HEAD, LR)
 
-    train(SINGLE_HEAD, OH_TRAIN_DATASET, LABELS, OH_VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, HEAD_OPTIMIZER, using_forward_with_logits=True, tokenizer=TOKENIZER)
+    #train(SINGLE_HEAD, OH_TRAIN_DATASET, LABELS, OH_VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, HEAD_OPTIMIZER, using_forward_with_logits=True, tokenizer=TOKENIZER)
 
