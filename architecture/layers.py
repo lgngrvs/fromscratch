@@ -148,6 +148,8 @@ class EmbeddingLayer(Module):
         to write a blog post about though that's probably
         not counterfactual good time spent.
         """
+        if x_is_nan(x, 98765):
+            print("BEFORE! EMBED LAYER")
         return self.E[x] # just read the rows rather than doing one-hot multiplication (wasting matmletters 
 
 class UnembeddingLayer(Module):
@@ -331,14 +333,33 @@ class MultiHeadAttention(Module):
         # print(f"x size: {x.size()}, self.W_q size: {self.W_q.size()}")
         # x size: torch.Size([2, 3, 4]), self.W_q size: torch.Size([3, 4, 2])
         Q = einsum(x, self.W_q, "... seq lat, lat heads dqk -> ... seq heads dqk")
+        if x_is_nan(Q, 200111):
+            raise
+        
         K = einsum(x, self.W_k, "... seq lat, lat heads dqk -> ... seq heads dqk")
+        if x_is_nan(K, 200112): 
+            raise
         V = einsum(x, self.W_v, "... seq lat, lat heads dv -> ... seq heads dv") 
+        x_is_nan(V, 200113)
 
         QK = einsum(Q, K, "... seq1 heads dqk, ... seq2 heads dqk -> ... heads seq1 seq2") # I don't think I actually get how this one works. Einsum is letting me get away with shit.
+        if x_is_nan(QK, 2002):
+            raise
         QK_dk = QK * (tls.ones_like(QK) * tls.reciprocal(tls.sqrt(tls.tensor(self.qk_dim))))
+        x_is_nan(QK_dk, 2003)
         attention_scores = softmax(QK_dk, dim=-1, masked=True, mask_dim=-2)
+        x_is_nan(attention_scores, 2006)
+        for i in range(attention_scores.shape[0]):
+            if x_is_nan(attention_scores[i], 0):
+                print(attention_scores[i])
+                raise
         sQKV = einsum(attention_scores, V, "... heads seq1 seq2, ... seq2 heads dv -> ... seq1 heads dv").flatten(-2,-1) # flatten to concatenate heads back together
+
+        x_is_nan(sQKV, 2004)
+
         out = einsum(sQKV, self.W_o, "... seq o_dim, o_dim latent_dim-> ... seq latent_dim") 
+        
+        x_is_nan(out, 2005)
         return out
 
 class TransformerBlock(Module):
@@ -369,11 +390,23 @@ class TransformerBlock(Module):
         self.ln_2 = LayerNorm()
 
     def forward(self, x):
+        x_is_nan(x,10011)
         x = x + self.mhsa(x)
+        x_is_nan(x, 1001)
         x = self.ln_1(x)
+        x_is_nan(x, 1002)
         x = x + self.mlp(x)
+        x_is_nan(x, 1003)
         x = self.ln_2(x)
+        x_is_nan(x, 1004)
         return x
+
+def x_is_nan(x: Tensor, layer_idx: int):
+    if tls.isnan(x).any().item():
+        print(f"NAN DISCOVERED IN FORWARD PASS AT LAYER {layer_idx}!")
+        #tls.set_printoptions(profile="full")
+        print(x)
+    return False
 
 class StandardTransformer(Module):
     """
@@ -415,12 +448,24 @@ class StandardTransformer(Module):
 
     def forward(self, x: Tensor):
         x = self.embed(x)
+        
+        if x_is_nan(x, 111):
+            print("embed")
+            print(self.embed.E) 
+            for i in range(self.embed.E.shape[0]):
+                if x_is_nan(self.embed.E[i]):
+                    print(self.embed.E[i])
+            raise
+            
         if self.positional_encoding_name == "sinusoidal":
-            #save_x = x.clone()
             x = self.positional_encode(x) # Goes after embed
-            #print(x - save_x)
+        
+        if x_is_nan(x, 99):
+            print("pos encode")
         for l in range(self.num_blocks): 
             x = self.blocks[l](x)
+            if x_is_nan(x, l):
+                raise
         x = self.unembed(x)
         logits = softmax(x, dim=-1)
         return logits

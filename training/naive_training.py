@@ -3,21 +3,6 @@ from tools import Tensor
 from architecture.layers import ToyTokenizer, StandardTransformer, MLP, Tokenizer, MultiHeadAttention
 from training.optimization import SGD, Optimizer, cross_entropy_loss, accuracy
 import plotext as pltxt
-"""
-TODO BEFORE TRAINING:
-[x] Implement train script
-    [x] Implement boilerplate
-    [x] Implement loss function
-    [x] Implement an optimizer
-[x] Implement dataset generation
-Improvements:
-    [x] Add validation set
-    [x] Implement positional encoding
-    [x] Implement ignoring tokens 
-    [x] Implement loss graphing
-    [ ] Add training for other models
-"""
-
 
 """
 SYNTHETIC DATA
@@ -65,7 +50,6 @@ def generate_positional_test_dataset(n_datapoints:int, max_length: int=24):
     that transformers learn positional encodings
     *just* from the causal mask somehow. 
     
-    give me max_length 99. then divide by 3s to get 33 datapoints of 4 each that's the problem
     """
     #encodings = ["000", "001", "010","011", "100", "101", "110", "111"]
     #letters = ["A", "B", "C", "D", "E", "F", "G", "H"]
@@ -89,13 +73,26 @@ def generate_positional_test_mask(tokenized_dataset: Tensor):
     mask[:,4::5] = 1
     return mask
 
-
-    
     
 
 """
 TRAINING UTILS
 """
+
+def check_backprop_for_nan(model):
+    """
+    Utility function to iterate
+    through parameters to check for nan.
+    Slows down training presumably.
+    """
+    nan_exists=False
+    for param in model.parameters():
+        if tls.isnan(param).any().item():
+            print("NAN DISCOVERED!")
+            nan_exists=True
+    if nan_exists:
+        return True
+    return False
 
 
 def plot_train_val_curves(loss_history: list[float], val_history: list[float], val_steps: list[int]):
@@ -149,8 +146,13 @@ def train(model, dataset, labels, val_dataset, val_labels, batch_size: int, epoc
             else: 
                 logits = model(batch)
             loss = loss_function(logits, batch_labels, ignore_token_id=tokenizer.pad_token_id)
+            if loss != loss:
+                print("Loss is NAN!") 
             loss_history.append(loss.item())
             loss.backward() # computes the gradient of the parameters wrt the loss. You can access the gradient using Tensor.grad. This is what we will be doing.
+            nan_exists = check_backprop_for_nan(model)
+            if nan_exists:
+                return
             optimizer.step() # The optimizer already has the model loaded into it, and will access the gradients that way directly. Thus, all we need to do is tell the optimizer to take a step in the direction of that gradient we've accumulated.
             if current_train_step % print_loss_freq == 0:
                 print(f"Loss at step {current_train_step}: {loss.item()}")
@@ -171,8 +173,6 @@ if __name__ == "__main__":
     """
     Runs the naive training script.
     """
-    
-
 
     """
     TRAINING PARAMETERS
@@ -184,7 +184,7 @@ if __name__ == "__main__":
 
 
     """
-    TRAIN A TRANSFORMER
+    TRAIN A TRANSFORMER ON POSITIONAL TASK
     """
     EPOCHS=40
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     OPTIMIZER=SGD(MODEL, LR)
     OPTIMIZER_NO_EMBED=SGD(NO_EMBED_MODEL, LR)
 
-    train(MODEL, DATASET, LABELS, VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, OPTIMIZER, print_loss_freq=20)
+    # train(MODEL, DATASET, LABELS, VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, OPTIMIZER, print_loss_freq=20)
     train(NO_EMBED_MODEL, DATASET, LABELS, VAL_DATASET, VAL_LABELS, BATCH_SIZE, EPOCHS, OPTIMIZER_NO_EMBED,print_loss_freq=20)
 
     """

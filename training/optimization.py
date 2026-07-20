@@ -55,6 +55,12 @@ def cross_entropy_loss(y_pred: Tensor, labels: Tensor, ignore_token_id: int=-100
     ignore_positions_mask = (labels == ignore_token_id) 
     relevant_logits = relevant_logits.masked_fill(ignore_positions_mask, 1.0) # fills with 1, and log(1)=0 so this will no longer contribute to the loss
     loss = -tls.sum(tls.log(relevant_logits)) 
+    if loss != loss:
+        for i in range(relevant_logits.shape[0]):
+            if tls.isnan(relevant_logits[i]).any().item():
+                print("NAN DISCOVERED: Datapoint number ", i) 
+                print(relevant_logits[i])
+                print(tls.log(relevant_logits)[i])
     return loss
 
 
